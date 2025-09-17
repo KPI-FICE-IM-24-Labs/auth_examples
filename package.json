@@ -1,0 +1,29 @@
+{
+  "name": "auth_examples",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/KPI-FICE-IM-24-Labs/auth_examples#readme",
+  "bugs": {
+    "url": "https://github.com/KPI-FICE-IM-24-Labs/auth_examples/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KPI-FICE-IM-24-Labs/auth_examples.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "body-parser": "^2.2.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "on-finished": "^2.4.1",
+    "uuid": "^13.0.0"
+  }
+}
