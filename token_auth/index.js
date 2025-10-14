@@ -3,17 +3,20 @@ const onFinished = require("on-finished");
 const bodyParser = require("body-parser");
 const path = require("path");
 const crypto = require("node:crypto");
-const jose = require('jose');
-const fs = require('node:fs');
+const jose = require("jose");
+const fs = require("node:fs");
+const querystring = require("querystring");
 
 const port = 3000;
 const app = express();
 require("dotenv").config();
 
-const privateKey = crypto.createPrivateKey(fs.readFileSync(`${process.cwd()}/../jwe.pem`));
+const privateKey = crypto.createPrivateKey(
+  fs.readFileSync(`${process.cwd()}/../jwe.pem`),
+);
 
 const JWKS = jose.createRemoteJWKSet(
-    new URL(`https://${process.env.DOMAIN}/.well-known/jwks.json`)
+  new URL(`https://${process.env.DOMAIN}/.well-known/jwks.json`),
 );
 
 app.use(bodyParser.json());
@@ -206,7 +209,10 @@ app.get("/", async (req, res) => {
   console.log("GET /");
   if (req.session.access_token) {
     try {
-      const { plaintext } = await jose.compactDecrypt(req.session.access_token, privateKey);
+      const { plaintext } = await jose.compactDecrypt(
+        req.session.access_token,
+        privateKey,
+      );
       const jwt = new TextDecoder().decode(plaintext);
       const { payload } = await jose.jwtVerify(jwt, JWKS, {
         issuer: `https://${DOMAIN}/`,
@@ -217,7 +223,9 @@ app.get("/", async (req, res) => {
       const tokenLifetime = req.session.expires_at - now;
 
       if (tokenLifetime <= 30) {
-        const response = await auth0LoginRefreshToken(req.session.refresh_token);
+        const response = await auth0LoginRefreshToken(
+          req.session.refresh_token,
+        );
         const responseObj = JSON.parse(response);
 
         req.session.access_token = responseObj.access_token;
@@ -232,7 +240,7 @@ app.get("/", async (req, res) => {
         logout: "http://localhost:3000/logout",
       });
     } catch (error) {
-      console.log(error)
+      console.log(error);
       sessions.destroy(req, res);
       return res.sendFile(path.join(__dirname + "/index.html"));
     }
@@ -241,29 +249,59 @@ app.get("/", async (req, res) => {
 });
 
 app.get("/logout", (req, res) => {
+  const url = new URL("/v2/logout/", `https://${DOMAIN}`);
+  url.searchParams.set("client_id", CLIENT_ID);
+  url.searchParams.set("returnTo", "http://localhost:3000/");
   sessions.destroy(req, res);
-  res.redirect("/");
+  res.redirect(url.toString());
 });
 
-app.post("/api/login", async (req, res) => {
-  const { login, password } = req.body;
-  await auth0Login(login, password)
-    .then((response) => {
-      const result = JSON.parse(response);
-      console.log(result);
-      req.session.username = login;
-      req.session.login = login;
-      req.session.access_token = result.access_token;
-      req.session.expires_at =
-        Math.floor(Date.now() / 1000) + result.expires_in;
-      req.session.refresh_token = result.refresh_token;
-      res.json({ token: req.sessionId });
-    })
-    .catch((error) => {
-      console.error(error);
-      res.status(401).send();
-    });
+app.get("/api/login", async (req, res) => {
+  const params = querystring.stringify({
+    client_id: CLIENT_ID,
+    response_type: "code",
+    redirect_uri: "http://localhost:3000/api/callback",
+    scope: "openid profile email offline_access",
+    audience: API_IDENTIFIER,
+  });
+
+  res.redirect(`https://${DOMAIN}/authorize?${params}`);
 });
+
+app.get("/api/callback", async (req, res) => {
+  const code = req.query.code;
+
+  if (!code) return res.status(400).send("No code provided");
+
+  try {
+    const response = await axios.post(
+      `https://${DOMAIN}/oauth/token`,
+      {
+        grant_type: "authorization_code",
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        code: code,
+        redirect_uri: "http://localhost:3000/api/callback",
+      },
+      { headers: { "Content-Type": "application/json" } },
+    );
+
+    const { access_token, id_token, refresh_token, expires_in } = response.data;
+
+    const sessionId = sessions.init(res);
+    req.session.access_token = access_token;
+    req.session.id_token = id_token;
+    req.session.refresh_token = refresh_token;
+    req.session.expires_at = Math.floor(Date.now() / 1000) + expires_in;
+
+    console.log(response.data);
+    res.redirect("/");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Login failed");
+  }
+});
+
 app.post("/api/signup", (req, res) => {
   const { login, password } = req.body;
   auth0Signup(login, password);
