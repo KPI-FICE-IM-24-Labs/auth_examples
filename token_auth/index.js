@@ -1,137 +1,248 @@
-const uuid = require('uuid');
-const express = require('express');
-const onFinished = require('on-finished');
-const bodyParser = require('body-parser');
-const path = require('path');
+const express = require("express");
+const onFinished = require("on-finished");
+const bodyParser = require("body-parser");
+const path = require("path");
 const port = 3000;
-const fs = require('fs');
-
 const app = express();
+require("dotenv").config();
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const SESSION_KEY = 'Authorization';
+const SESSION_KEY = "Authorization";
+
+const fs = require("node:fs");
+const uuid = require("uuid");
 
 class Session {
-    #sessions = {}
+  #sessions = {};
+  constructor() {
+    try {
+      this.#sessions = fs.readFileSync("./sessions.json", "utf8");
+      this.#sessions = JSON.parse(this.#sessions.trim());
 
-    constructor() {
-        try {
-            this.#sessions = fs.readFileSync('./sessions.json', 'utf8');
-            this.#sessions = JSON.parse(this.#sessions.trim());
-
-            console.log(this.#sessions);
-        } catch(e) {
-            this.#sessions = {};
-        }
+      console.log(this.#sessions);
+    } catch (e) {
+      this.#sessions = {};
     }
+  }
 
-    #storeSessions() {
-        fs.writeFileSync('./sessions.json', JSON.stringify(this.#sessions), 'utf-8');
+  #storeSessions() {
+    fs.writeFileSync(
+      "./sessions.json",
+      JSON.stringify(this.#sessions),
+      "utf-8",
+    );
+  }
+
+  set(key, value) {
+    if (!value) {
+      value = {};
     }
+    this.#sessions[key] = value;
+    this.#storeSessions();
+  }
 
-    set(key, value) {
-        if (!value) {
-            value = {};
-        }
-        this.#sessions[key] = value;
-        this.#storeSessions();
-    }
+  get(key) {
+    return this.#sessions[key];
+  }
 
-    get(key) {
-        return this.#sessions[key];
-    }
+  init(res) {
+    const sessionId = uuid.v4();
+    this.set(sessionId);
 
-    init(res) {
-        const sessionId = uuid.v4();
-        this.set(sessionId);
+    return sessionId;
+  }
 
-        return sessionId;
-    }
-
-    destroy(req, res) {
-        const sessionId = req.sessionId;
-        delete this.#sessions[sessionId];
-        this.#storeSessions();
-    }
+  destroy(req, res) {
+    const sessionId = req.sessionId;
+    delete this.#sessions[sessionId];
+    this.#storeSessions();
+  }
 }
 
 const sessions = new Session();
 
-app.use((req, res, next) => {
-    let currentSession = {};
-    let sessionId = req.get(SESSION_KEY);
+const request = require("request");
+const axios = require("axios");
 
-    if (sessionId) {
-        currentSession = sessions.get(sessionId);
-        if (!currentSession) {
-            currentSession = {};
-            sessionId = sessions.init(res);
-        }
-    } else {
-        sessionId = sessions.init(res);
-    }
+const DOMAIN = process.env.DOMAIN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const API_IDENTIFIER = process.env.API_IDENTIFIER;
 
-    req.session = currentSession;
-    req.sessionId = sessionId;
-
-    onFinished(req, () => {
-        const currentSession = req.session;
-        const sessionId = req.sessionId;
-        sessions.set(sessionId, currentSession);
+const auth0Login = (login, password) => {
+  return new Promise((resolve, reject) => {
+    const options = {
+      method: "POST",
+      url: `https://${DOMAIN}/oauth/token`,
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      form: {
+        grant_type: "password",
+        username: login,
+        password: password,
+        audience: API_IDENTIFIER,
+        scope: "offline_access",
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+      },
+    };
+    request(options, (error, response, body) => {
+      if (error) reject(error);
+      resolve(body);
     });
+  });
+};
 
-    next();
-});
+const getAccessToken = async () => {
+  const options = {
+    method: "POST",
+    url: `https://${DOMAIN}/oauth/token`,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    data: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      audience: API_IDENTIFIER,
+    }),
+  };
 
-app.get('/', (req, res) => {
-    if (req.session.username) {
-        return res.json({
-            username: req.session.username,
-            logout: 'http://localhost:3000/logout'
-        })
-    }
-    res.sendFile(path.join(__dirname+'/index.html'));
-})
+  const response = await axios.request(options);
+  return response.data.access_token;
+};
 
-app.get('/logout', (req, res) => {
-    sessions.destroy(req, res);
-    res.redirect('/');
-});
+const auth0Signup = async (login, password) => {
+  const accessToken = await getAccessToken();
+  let data = JSON.stringify({
+    email: login,
+    nickname: login,
+    connection: "Username-Password-Authentication",
+    password: password,
+  });
 
-const users = [
-    {
-        login: 'Login',
-        password: 'Password',
-        username: 'Username',
+  let config = {
+    method: "POST",
+    maxBodyLength: Infinity,
+    url: `https://${DOMAIN}/api/v2/users`,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
     },
-    {
-        login: 'Login1',
-        password: 'Password1',
-        username: 'Username1',
-    }
-]
+    data: data,
+  };
 
-app.post('/api/login', (req, res) => {
-    const { login, password } = req.body;
-
-    const user = users.find((user) => {
-        if (user.login == login && user.password == password) {
-            return true;
-        }
-        return false
+  axios
+    .request(config)
+    .then((response) => {
+      console.log(JSON.stringify(response.data));
+    })
+    .catch((error) => {
+      console.log(error);
     });
+};
 
-    if (user) {
-        req.session.username = user.username;
-        req.session.login = user.login;
+const auth0LoginRefreshToken = (refreshToken) => {
+  return new Promise((resolve, reject) => {
+    const options = {
+      method: "POST",
+      url: `https://${DOMAIN}/oauth/token`,
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      form: {
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      },
+    };
 
-        res.json({ token: req.sessionId });
+    request(options, (error, response, body) => {
+      if (error) reject(error);
+      resolve(body);
+    });
+  });
+};
+
+app.use((req, res, next) => {
+  let currentSession = {};
+  let sessionId = req.get(SESSION_KEY);
+
+  if (sessionId) {
+    currentSession = sessions.get(sessionId);
+    if (!currentSession) {
+      currentSession = {};
+      sessionId = sessions.init(res);
     }
+  } else {
+    sessionId = sessions.init(res);
+  }
 
-    res.status(401).send();
+  req.session = currentSession;
+  req.sessionId = sessionId;
+
+  onFinished(req, () => {
+    const currentSession = req.session;
+    const sessionId = req.sessionId;
+    sessions.set(sessionId, currentSession);
+  });
+
+  next();
 });
 
+app.get("/", async (req, res) => {
+  console.log("GET /");
+  if (req.session.access_token) {
+    const tokenLifetime =
+      req.session.expires_at - Math.floor(Date.now() / 1000);
+    if (tokenLifetime <= 30) {
+      const response = await auth0LoginRefreshToken(req.session.refresh_token);
+      const responseObj = JSON.parse(response);
+      req.session.access_token = responseObj.access_token;
+      req.session.expires_at =
+        Math.floor(Date.now() / 1000) + responseObj.expires_in;
+      console.log(`token refreshed ${response}`);
+    }
+
+    return res.json({
+      username: req.session.username,
+      logout: "http://localhost:3000/logout",
+    });
+  }
+  res.sendFile(path.join(__dirname + "/index.html"));
+});
+
+app.get("/logout", (req, res) => {
+  sessions.destroy(req, res);
+  res.redirect("/");
+});
+
+app.post("/api/login", async (req, res) => {
+  const { login, password } = req.body;
+  await auth0Login(login, password)
+    .then((response) => {
+      const result = JSON.parse(response);
+      console.log(result);
+      req.session.username = login;
+      req.session.login = login;
+      req.session.access_token = result.access_token;
+      req.session.expires_at =
+        Math.floor(Date.now() / 1000) + result.expires_in;
+      req.session.refresh_token = result.refresh_token;
+      res.json({ token: req.sessionId });
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(401).send();
+    });
+});
+app.post("/api/signup", (req, res) => {
+  const { login, password } = req.body;
+  auth0Signup(login, password);
+});
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+  console.log(`Example app listening on port ${port}`);
+});
