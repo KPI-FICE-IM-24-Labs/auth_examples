@@ -1,0 +1,14 @@
+{
+	"dependencies": {
+		"axios": "^1.12.2",
+		"body-parser": "^2.2.0",
+		"dotenv": "^17.2.3",
+		"express": "^5.1.0",
+		"express-oauth2-jwt-bearer": "^1.7.1",
+		"express-openid-connect": "^2.19.2",
+		"on-finished": "^2.4.1",
+		"prettier": "^3.6.2",
+		"request": "^2.88.2",
+		"uuid": "^13.0.0"
+	}
+}
