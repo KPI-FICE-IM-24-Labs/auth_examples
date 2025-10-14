@@ -2,16 +2,25 @@ const express = require("express");
 const onFinished = require("on-finished");
 const bodyParser = require("body-parser");
 const path = require("path");
+const crypto = require("node:crypto");
+const jose = require('jose');
+const fs = require('node:fs');
+
 const port = 3000;
 const app = express();
 require("dotenv").config();
+
+const privateKey = crypto.createPrivateKey(fs.readFileSync(`${process.cwd()}/../jwe.pem`));
+
+const JWKS = jose.createRemoteJWKSet(
+    new URL(`https://${process.env.DOMAIN}/.well-known/jwks.json`)
+);
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const SESSION_KEY = "Authorization";
 
-const fs = require("node:fs");
 const uuid = require("uuid");
 
 class Session {
@@ -196,21 +205,37 @@ app.use((req, res, next) => {
 app.get("/", async (req, res) => {
   console.log("GET /");
   if (req.session.access_token) {
-    const tokenLifetime =
-      req.session.expires_at - Math.floor(Date.now() / 1000);
-    if (tokenLifetime <= 30) {
-      const response = await auth0LoginRefreshToken(req.session.refresh_token);
-      const responseObj = JSON.parse(response);
-      req.session.access_token = responseObj.access_token;
-      req.session.expires_at =
-        Math.floor(Date.now() / 1000) + responseObj.expires_in;
-      console.log(`token refreshed ${response}`);
-    }
+    try {
+      const { plaintext } = await jose.compactDecrypt(req.session.access_token, privateKey);
+      const jwt = new TextDecoder().decode(plaintext);
+      const { payload } = await jose.jwtVerify(jwt, JWKS, {
+        issuer: `https://${DOMAIN}/`,
+        audience: API_IDENTIFIER,
+      });
 
-    return res.json({
-      username: req.session.username,
-      logout: "http://localhost:3000/logout",
-    });
+      const now = Math.floor(Date.now() / 1000);
+      const tokenLifetime = req.session.expires_at - now;
+
+      if (tokenLifetime <= 30) {
+        const response = await auth0LoginRefreshToken(req.session.refresh_token);
+        const responseObj = JSON.parse(response);
+
+        req.session.access_token = responseObj.access_token;
+        req.session.expires_at = now + responseObj.expires_in;
+
+        console.log("Token refreshed");
+      }
+
+      res.json({
+        username: req.session.username,
+        payload,
+        logout: "http://localhost:3000/logout",
+      });
+    } catch (error) {
+      console.log(error)
+      sessions.destroy(req, res);
+      return res.sendFile(path.join(__dirname + "/index.html"));
+    }
   }
   res.sendFile(path.join(__dirname + "/index.html"));
 });
