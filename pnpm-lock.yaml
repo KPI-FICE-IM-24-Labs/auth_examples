@@ -26,6 +26,9 @@ importers:
       express-openid-connect:
         specifier: ^2.19.2
         version: 2.19.2(express@5.1.0)
+      jose:
+        specifier: ^6.1.0
+        version: 6.1.0
       on-finished:
         specifier: ^2.4.1
         version: 2.4.1
@@ -424,6 +427,9 @@ packages:
 
   jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
+
+  jose@6.1.0:
+    resolution: {integrity: sha512-TTQJyoEoKcC1lscpVDCSsVgYzUDg/0Bt3WE//WiTPK6uOCQC2KZS4MpugbMWt/zyjkopgZoXhZuCi00gLudfUA==}
 
   jsbn@0.1.1:
     resolution: {integrity: sha512-UVU9dibq2JcFWxQPA6KCqj5O42VOmAY3zQUfEKxU0KpTGXwNoCjkX1e13eHNvw/xPynt6pU0rZ1htjWTNTSXsg==}
@@ -1141,6 +1147,8 @@ snapshots:
       '@panva/asn1.js': 1.0.0
 
   jose@4.15.9: {}
+
+  jose@6.1.0: {}
 
   jsbn@0.1.1: {}
 
