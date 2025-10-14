@@ -35,6 +35,9 @@ importers:
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
+      querystring:
+        specifier: ^0.2.1
+        version: 0.2.1
       request:
         specifier: ^2.88.2
         version: 2.88.2
@@ -584,6 +587,11 @@ packages:
   qs@6.5.3:
     resolution: {integrity: sha512-qxXIEh4pCGfHICj1mAJQ2/2XVZkjCDTcEgfoSQxc/fYivUZxTkk7L3bDBJSoNrEzXI17oUO5Dp07ktqE5KzczA==}
     engines: {node: '>=0.6'}
+
+  querystring@0.2.1:
+    resolution: {integrity: sha512-wkvS7mL/JMugcup3/rMitHmd9ecIGd2lhFhK9N3UUQ450h66d1r3Y9nvXzQAW1Lq+wyx61k/1pfKS5KuKiyEbg==}
+    engines: {node: '>=0.4.x'}
+    deprecated: The querystring API is considered Legacy. new code should use the URLSearchParams API instead.
 
   quick-lru@5.1.1:
     resolution: {integrity: sha512-WuyALRjWPDGtt/wzJiadO5AXY+8hZ80hVpe6MyivgraREW751X3SbhRvG3eLKOYN+8VEvqLcf3wdnt44Z4S4SA==}
@@ -1268,6 +1276,8 @@ snapshots:
       side-channel: 1.1.0
 
   qs@6.5.3: {}
+
+  querystring@0.2.1: {}
 
   quick-lru@5.1.1: {}
 

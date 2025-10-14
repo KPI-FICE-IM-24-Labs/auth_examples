@@ -9,6 +9,7 @@
 		"jose": "^6.1.0",
 		"on-finished": "^2.4.1",
 		"prettier": "^3.6.2",
+		"querystring": "^0.2.1",
 		"request": "^2.88.2",
 		"uuid": "^13.0.0"
 	}
